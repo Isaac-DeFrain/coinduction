@@ -1,0 +1,3 @@
+(library
+ (name coinduction)
+ (libraries async base))
