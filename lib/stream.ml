@@ -3,33 +3,35 @@ open! Base
 module Make (X : sig
   type t [@@deriving eq]
 end) : Stream_intf.S with type s := X.t = struct
-  type t =
+  type u =
     { value : X.t
     ; next : X.t -> X.t
     }
 
-  let make ~value ~next = { value; next }
+  type _ t = Stream : u -> X.t t
 
-  let peek t = t.value
+  let make ~value ~next = Stream { value; next }
 
-  let next ?(n = 1) =
+  let peek (Stream u) = u.value
+
+  let next ?(n = 1) (Stream u) =
     let rec aux rem { value; next } =
       if rem < 1 then { value; next }
       else aux (rem - 1) { value = next value; next }
     in
-    aux n
+    Stream (aux n u)
 
-  let take ?(n = 1) =
+  let take ?(n = 1) (Stream u) =
     let rec aux rem acc { value; next } =
       if rem < 1 then acc
       else aux (rem - 1) (value :: acc) { value = next value; next }
     in
-    aux n []
+    aux n [] u
 
-  let co_equal_relation ta tb =
+  let co_equal_relation (Stream ua) (Stream ub) =
     let r = ref [] in
     let todo = ref [] in
-    todo := (ta, tb) :: !todo;
+    todo := (ua, ub) :: !todo;
     let rec loop () =
       match List.hd !todo with
       | None -> (true, !r)
@@ -38,33 +40,37 @@ end) : Stream_intf.S with type s := X.t = struct
           List.mem !r (p1.value, p2.value) ~equal:(fun (a1, a2) (b1, b2) ->
               X.equal a1 a2 && X.equal b1 b2)
         then (true, !r)
-        else if not @@ X.equal p1.value p2.value then (false, !r)
-        else (
-          todo := (next p1, next p2) :: !todo;
+        else if not (X.equal p1.value p2.value) then (false, !r)
+        else
+          let (Stream n1) = next (Stream p1) in
+          let (Stream n2) = next (Stream p2) in
+          todo := (n1, n2) :: !todo;
           r := (p1.value, p2.value) :: !r;
-          loop ())
+          loop ()
     in
     loop ()
 
-  let co_equal ta tb = fst @@ co_equal_relation ta tb
+  let co_equal ta tb = fst (co_equal_relation ta tb)
 
-  let combine ~f ta tb =
-    let a = ref ta.value in
-    let b = ref tb.value in
-    { value = f !a !b
-    ; next =
-        (fun _ ->
-          a := ta.next !a;
-          b := tb.next !b;
-          f !a !b)
-    }
+  let combine ~f (Stream ua) (Stream ub) =
+    let a = ref ua.value in
+    let b = ref ub.value in
+    Stream
+      { value = f !a !b
+      ; next =
+          (fun _ ->
+            a := ua.next !a;
+            b := ub.next !b;
+            f !a !b)
+      }
 
-  let map t ~f =
-    let v = ref t.value in
-    { value = f t.value
-    ; next =
-        (fun _ ->
-          v := t.next !v;
-          f !v)
-    }
+  let map (Stream u) ~f =
+    let v = ref u.value in
+    Stream
+      { value = f u.value
+      ; next =
+          (fun _ ->
+            v := u.next !v;
+            f !v)
+      }
 end

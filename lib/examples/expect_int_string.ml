@@ -4,7 +4,8 @@ let print_bool = Caml.Printf.printf "%b"
 
 let ti1 = IntStream.make ~value:0 ~next:(fun x -> x + 1)
 
-let ts1 = StringStream.make ~value:"hello + world" ~next:(fun x -> x ^ " + world")
+let ts1 =
+  StringStream.make ~value:"hello + world" ~next:(fun x -> x ^ " + world")
 
 let%expect_test "int_stream_coeq_test" =
   print_bool IntStream.(co_equal ti ti1);
